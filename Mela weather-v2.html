@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weather Dashboard - OpenWeatherMap API</title>
+<style>
+:root{--bg:#0b2545;--card:#13315c;--ink:#eef4ff;--mute:#9db4d6;--acc:#ffb703;--line:#25497f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,"Segoe UI",sans-serif;padding:20px}
+main{max-width:560px;margin:0 auto}
+h1{font-size:1.5rem;margin:6px 0 2px}
+.sub{color:var(--mute);margin:0 0 16px}
+.search{display:flex;gap:8px}
+input{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:#0d2a4f;color:var(--ink);font-size:1rem}
+button{padding:11px 16px;border:0;border-radius:10px;background:var(--acc);color:#2b1d00;font-weight:700;font-size:1rem;cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:16px}
+#msg{margin-top:14px;color:#ffb4a2;font-weight:600}
+.now{display:flex;align-items:center;gap:12px}
+.now img{width:90px;height:90px}
+.temp{font-size:2.6rem;font-weight:800;line-height:1}
+.city{font-size:1.2rem;font-weight:700}
+.desc{color:var(--mute);text-transform:capitalize}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.box{background:#0d2a4f;border-radius:10px;padding:10px;text-align:center}
+.box small{display:block;color:var(--mute)}
+.fc{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-top:10px}
+.day{background:#0d2a4f;border-radius:10px;padding:10px;text-align:center;font-size:.9rem}
+.day img{width:50px;height:50px}
+h2{font-size:1.05rem;margin:0}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>🌦️ Weather Dashboard</h1>
+<p class="sub">Live data from the OpenWeatherMap API</p>
+
+<div class="search">
+  <input id="city" placeholder="Enter city name" autocomplete="off">
+  <button id="go">Search</button>
+</div>
+<div id="msg"></div>
+
+<div class="card hide" id="now">
+  <div class="now">
+    <img id="icon" alt="weather icon">
+    <div>
+      <div class="city" id="name"></div>
+      <div class="temp" id="temp"></div>
+      <div class="desc" id="desc"></div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="box"><small>Feels like</small><span id="feels"></span></div>
+    <div class="box"><small>Humidity</small><span id="hum"></span></div>
+    <div class="box"><small>Wind</small><span id="wind"></span></div>
+  </div>
+</div>
+
+<div class="card hide" id="fcCard">
+  <h2>5-day forecast</h2>
+  <div class="fc" id="fc"></div>
+</div>
+</main>
+
+<script>
+// STEP 1: paste your free OpenWeatherMap API key between the quotes
+var API_KEY = "e69eb0af867277462db40eda1f2269cc";
+
+var BASE = "https://api.openweathermap.org/data/2.5/";
+var $ = function (id) { return document.getElementById(id); };
+
+function show(text) { $("msg").textContent = text; }
+
+function iconUrl(code) {
+  return "https://openweathermap.org/img/wn/" + code + "@2x.png";
+}
+
+async function getWeather(city) {
+  if (!API_KEY) {
+      return show("NEW FILE WORKING");
+  }
+  if (!city) return show("Please type a city name.");
+  show("Loading...");
+  try {
+    var q = "?q=" + encodeURIComponent(city) + "&units=metric&appid=" + API_KEY;
+    var res = await fetch(BASE + "weather" + q);
+    var data = await res.json();
+    if (res.status === 401) return show("Invalid or not-yet-active API key. New keys can take up to 2 hours.");
+    if (data.cod == 404) return show("City not found. Check the spelling.");
+    if (!res.ok) return show("Something went wrong. Try again.");
+
+    $("name").textContent = data.name + ", " + data.sys.country;
+    $("temp").textContent = Math.round(data.main.temp) + "°C";
+    $("desc").textContent = data.weather[0].description;
+    $("icon").src = iconUrl(data.weather[0].icon);
+    $("feels").textContent = Math.round(data.main.feels_like) + "°C";
+    $("hum").textContent = data.main.humidity + "%";
+    $("wind").textContent = data.wind.speed + " m/s";
+    $("now").classList.remove("hide");
+
+    var fres = await fetch(BASE + "forecast" + q);
+    var f = await fres.json();
+    drawForecast(f.list || []);
+    show("");
+  } catch (e) {
+    show("Network error. Check your internet connection.");
+  }
+}
+
+function drawForecast(list) {
+  var box = $("fc");
+  box.innerHTML = "";
+  var seen = {};
+  list.forEach(function (item) {
+    var day = item.dt_txt.split(" ")[0];
+    var hour = item.dt_txt.split(" ")[1];
+    if (seen[day] || hour !== "12:00:00") return; // one reading per day (noon)
+    seen[day] = true;
+    var d = document.createElement("div");
+    d.className = "day";
+    var label = new Date(item.dt * 1000).toLocaleDateString("en-IN", { weekday: "short", day: "numeric" });
+    var l = document.createElement("div"); l.textContent = label;
+    var img = document.createElement("img"); img.src = iconUrl(item.weather[0].icon); img.alt = "";
+    var t = document.createElement("div"); t.textContent = Math.round(item.main.temp) + "°C";
+    d.appendChild(l); d.appendChild(img); d.appendChild(t);
+    box.appendChild(d);
+  });
+  $("fcCard").classList.toggle("hide", !box.children.length);
+}
+
+$("go").onclick = function () { getWeather($("city").value.trim()); };
+$("city").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") getWeather($("city").value.trim());
+});
+</script>
+</body>
+</html>
